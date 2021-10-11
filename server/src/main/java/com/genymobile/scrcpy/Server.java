@@ -54,39 +54,42 @@ public final class Server {
 
         boolean tunnelForward = options.isTunnelForward();
 
-        try (DesktopConnection connection = DesktopConnection.open(device, tunnelForward)) {
-            ScreenEncoder screenEncoder = new ScreenEncoder(options.getSendFrameMeta(), options.getBitRate(), options.getMaxFps(), codecOptions,
-                    options.getEncoderName());
+        Workarounds.prepareMainLooper();
+        while (true) {
+            try (DesktopConnection connection = DesktopConnection.open(device, tunnelForward)) {
+                ScreenEncoder screenEncoder = new ScreenEncoder(options.getSendFrameMeta(), options.getBitRate(), options.getMaxFps(), codecOptions,
+                        options.getEncoderName());
 
-            Thread controllerThread = null;
-            Thread deviceMessageSenderThread = null;
-            if (options.getControl()) {
-                final Controller controller = new Controller(device, connection);
+                Thread controllerThread = null;
+                Thread deviceMessageSenderThread = null;
+                if (options.getControl()) {
+                    final Controller controller = new Controller(device, connection);
 
-                // asynchronous
-                controllerThread = startController(controller);
-                deviceMessageSenderThread = startDeviceMessageSender(controller.getSender());
+                    // asynchronous
+                    controllerThread = startController(controller);
+                    deviceMessageSenderThread = startDeviceMessageSender(controller.getSender());
 
-                device.setClipboardListener(new Device.ClipboardListener() {
-                    @Override
-                    public void onClipboardTextChanged(String text) {
-                        controller.getSender().pushClipboardText(text);
-                    }
-                });
-            }
-
-            try {
-                // synchronous
-                screenEncoder.streamScreen(device, connection.getVideoFd());
-            } catch (IOException e) {
-                // this is expected on close
-                Ln.d("Screen streaming stopped");
-            } finally {
-                if (controllerThread != null) {
-                    controllerThread.interrupt();
+                    device.setClipboardListener(new Device.ClipboardListener() {
+                        @Override
+                        public void onClipboardTextChanged(String text) {
+                            controller.getSender().pushClipboardText(text);
+                        }
+                    });
                 }
-                if (deviceMessageSenderThread != null) {
-                    deviceMessageSenderThread.interrupt();
+
+                try {
+                    // synchronous
+                    screenEncoder.streamScreen(device, connection.getVideoFd());
+                } catch (IOException e) {
+                    // this is expected on close
+                    Ln.d("Screen streaming stopped");
+                } finally {
+                    if (controllerThread != null) {
+                        controllerThread.interrupt();
+                    }
+                    if (deviceMessageSenderThread != null) {
+                        deviceMessageSenderThread.interrupt();
+                    }
                 }
             }
         }

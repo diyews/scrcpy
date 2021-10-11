@@ -55,7 +55,6 @@ public class ScreenEncoder implements Device.RotationListener {
     }
 
     public void streamScreen(Device device, FileDescriptor fd) throws IOException {
-        Workarounds.prepareMainLooper();
 
         try {
             internalStreamScreen(device, fd);
