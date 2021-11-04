@@ -54,14 +54,29 @@ public final class Server {
 
         boolean tunnelForward = options.isTunnelForward();
 
+        DesktopConnection connection = null;
+        Thread controllerThread = null;
+        Thread deviceMessageSenderThread = null;
         Workarounds.prepareMainLooper();
         while (true) {
-            try (DesktopConnection connection = DesktopConnection.open(device, tunnelForward)) {
+            try {
+                DesktopConnection lastConnection = connection;
+                connection = DesktopConnection.open(device, tunnelForward);
+                if (lastConnection != null) {
+                    lastConnection.close();
+                }
+
+                if (controllerThread != null) {
+                    controllerThread.interrupt();
+                }
+                if (deviceMessageSenderThread != null) {
+                    deviceMessageSenderThread.interrupt();
+                }
+
                 ScreenEncoder screenEncoder = new ScreenEncoder(options.getSendFrameMeta(), options.getBitRate(), options.getMaxFps(), codecOptions,
                         options.getEncoderName());
 
-                Thread controllerThread = null;
-                Thread deviceMessageSenderThread = null;
+
                 if (options.getControl()) {
                     final Controller controller = new Controller(device, connection);
 
@@ -76,21 +91,8 @@ public final class Server {
                         }
                     });
                 }
-
-                try {
-                    // synchronous
-                    screenEncoder.streamScreen(device, connection.getVideoFd());
-                } catch (IOException e) {
-                    // this is expected on close
-                    Ln.d("Screen streaming stopped");
-                } finally {
-                    if (controllerThread != null) {
-                        controllerThread.interrupt();
-                    }
-                    if (deviceMessageSenderThread != null) {
-                        deviceMessageSenderThread.interrupt();
-                    }
-                }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
