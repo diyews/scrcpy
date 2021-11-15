@@ -2,13 +2,19 @@ package com.genymobile.scrcpy;
 
 import com.genymobile.scrcpy.wrappers.ContentProvider;
 
+import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.os.BatteryManager;
 import android.os.Build;
+import android.util.Base64;
+import android.util.Log;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -19,9 +25,33 @@ public final class Server {
         // not instantiable
     }
 
+    private static void startHttpServer(final Device device) throws IOException {
+        final HTTPServer httpServer = new HTTPServer(7008);
+        final HTTPServer.VirtualHost host = httpServer.getVirtualHost(null);
+        host.addContext("/ognahaonogna", new HTTPServer.ContextHandler() {
+            @Override
+            public int serve(HTTPServer.Request req, HTTPServer.Response resp) throws IOException {
+                final Size videoSize = device.getScreenInfo().getVideoSize();
+                final int width = req.getParams().get("w") != null ? Integer.parseInt(req.getParams().get("w")) : videoSize.getWidth();
+                final int height = req.getParams().get("h") != null ? Integer.parseInt(req.getParams().get("h")) : videoSize.getHeight();
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                final Bitmap bitmap = ScreenCaptorUtils.screenshot(width, height);
+                long timestamp = new Date().getTime();
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+                Log.i("xxx", String.valueOf(new Date().getTime() - timestamp));
+                final byte[] byteArray = bos.toByteArray();
+                resp.sendHeaders(200, byteArray.length, 0, null, "image/jpeg",null);
+                resp.sendBody(new ByteArrayInputStream(byteArray), -1, null);
+                return 0;
+            }
+        });
+        httpServer.start();
+    }
+
     private static void scrcpy(Options options) throws IOException {
         Ln.i("Device: " + Build.MANUFACTURER + " " + Build.MODEL + " (Android " + Build.VERSION.RELEASE + ")");
         final Device device = new Device(options);
+        startHttpServer(device);
         List<CodecOption> codecOptions = CodecOption.parse(options.getCodecOptions());
 
         boolean mustDisableShowTouchesOnCleanUp = false;
