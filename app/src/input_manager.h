@@ -17,6 +17,7 @@
 struct input_manager {
     struct controller *controller;
     struct screen *screen;
+    struct sc_seq *seq;
 
     struct sc_key_processor *kp;
     struct sc_mouse_processor *mp;
@@ -38,6 +39,8 @@ struct input_manager {
     unsigned key_repeat;
     SDL_Keycode last_keycode;
     uint16_t last_mod;
+
+    uint64_t next_sequence; // used for request acknowledgements
 };
 
 void
