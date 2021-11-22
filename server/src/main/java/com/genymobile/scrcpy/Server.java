@@ -14,9 +14,22 @@ import android.util.Log;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
 
 public final class Server {
 
@@ -36,11 +49,24 @@ public final class Server {
                 final int height = req.getParams().get("h") != null ? Integer.parseInt(req.getParams().get("h")) : videoSize.getHeight();
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 final Bitmap bitmap = ScreenCaptorUtils.screenshot(width, height);
-                long timestamp = new Date().getTime();
+                /* compress take about 150ms */
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bos);
-                Log.i("xxx", String.valueOf(new Date().getTime() - timestamp));
-                final byte[] byteArray = bos.toByteArray();
+//                final byte[] byteArray = bos.toByteArray();
+                byte[] byteArray = bos.toByteArray();
+
+                /* encrypt take 1 ~ 5ms */
+                byteArray = CBCCipher.encrypt(byteArray);
                 resp.sendHeaders(200, byteArray.length, 0, null, "image/jpeg",null);
+                resp.sendBody(new ByteArrayInputStream(byteArray), -1, null);
+                return 0;
+            }
+        });
+        host.addContext("/huinyegrbizgn", new HTTPServer.ContextHandler() {
+            @Override
+            public int serve(HTTPServer.Request req, HTTPServer.Response resp) throws IOException {
+                byte[] byteArray = Device.getDeviceName().getBytes(StandardCharsets.UTF_8);
+                byteArray = CBCCipher.encrypt(byteArray);
+                resp.sendHeaders(200, byteArray.length, 0, null, "text/plain",null);
                 resp.sendBody(new ByteArrayInputStream(byteArray), -1, null);
                 return 0;
             }
@@ -165,10 +191,15 @@ public final class Server {
         }
 
         String clientVersion = args[0];
-        if (!clientVersion.equals(BuildConfig.VERSION_NAME)) {
+//        if (!clientVersion.equals(BuildConfig.VERSION_NAME)) {
+//            throw new IllegalArgumentException(
+//                    "The server version (" + BuildConfig.VERSION_NAME + ") does not match the client " + "(" + clientVersion + ")");
+//        }
+        if (clientVersion.length() != 16) {
             throw new IllegalArgumentException(
-                    "The server version (" + BuildConfig.VERSION_NAME + ") does not match the client " + "(" + clientVersion + ")");
+                    "Encrypt key must be 16 length string");
         }
+        CBCCipher.cipherKey = clientVersion;
 
         final int expectedParameters = 16;
         if (args.length != expectedParameters) {
